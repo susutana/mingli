@@ -369,7 +369,7 @@ function camState(p){
     ty=Y0+clamp((p-P_BROWSE)/(P_END-P_BROWSE))*(NR-1)*DY;dd=3.0;pi=.02;ya=.14;tx=.3;
     if(p>P_END){
       const u=ss(clamp((p-P_END)/.09));
-      TREE.dd=Math.max(S*DD0*3.95/(H*.84),S*DD0*3.2/(W*.98));
+      TREE.dd=Math.max(S*DD0*3.95/(H*.84),S*DD0*3.2/(W*.98))*1.38;
       ty=lerp(ty,TREE.cy,u);dd=lerp(dd,TREE.dd/TV.zoom,u);tx=lerp(tx,0,u);ya=lerp(ya,0,u);pi=lerp(pi,0,u);dy=lerp(0,H*.44-CY,u);
     }
   }
@@ -1538,7 +1538,7 @@ const GLX={ok:false};
           gl_FragColor=vec4(c.rgb,c.a*uA*vig*bot);
         }`});
     const sScene=new THREE.Scene();sScene.add(new THREE.Mesh(new THREE.PlaneBufferGeometry(2,2),smat));
-    GLX.spA=0;
+    GLX.spA=0;let zoom=0;
     GLX.resize=()=>{R.setPixelRatio(DPR);R.setSize(W,H,false);buildTex();};
     GLX.frame=(now,p,cs,t,dt)=>{
       const a=ss(clamp((p-P_END-.07)/.08));
@@ -1546,9 +1546,10 @@ const GLX={ok:false};
       const tgt=mode==='idle'?1:(t<.8?1-ss(clamp(t/.8)):0);
       GLX.spA+=(tgt-GLX.spA)*Math.min(1,dt*(tgt>GLX.spA?2.5:12));
 
+      zoom+=dt*.035;
       if(GLX.spA>.003){
         SU.uRes.value.set(W,H);SU.uC.value.set(CX,CY);SU.uR.value=TOTAL*S*1.15;SU.uDpr.value=DPR;
-        SU.uZoom.value=0;SU.uRot.value=0;SU.uA.value=GLX.spA;
+        SU.uZoom.value=zoom;SU.uRot.value=now/1000*.008;SU.uA.value=GLX.spA;
         R.render(sScene,cam);shown=true;return;
       }
       if(a<.004){if(shown){R.clear();shown=false;}return;}

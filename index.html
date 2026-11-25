@@ -3,12 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="银罗盘">
 <title>银罗盘 · 起盘动画</title>
 <style>
 :root{--silver:#e8ebf2;--dim:#8d93a0;--line:rgba(220,226,240,.28)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;color:var(--silver);
-  background:radial-gradient(circle at 50% 36%,#0c0d14 0%,#030305 55%,#000 100%);
+html{background-color:#000}
+html,body{height:100%;overflow:hidden;color:var(--silver);background-color:#000;
+  background-image:radial-gradient(circle at 50% 36%,#0c0d14 0%,#030305 55%,#000 100%);
   font-family:"Noto Serif SC","Songti SC","STSong","Noto Serif CJK SC",serif}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
 #scroller{position:fixed;inset:0;z-index:1;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
@@ -46,7 +53,7 @@ button.ghost{height:38px;width:auto;padding:0 22px 0 calc(22px + .5em);font-size
 .col .e{font-size:11px;color:var(--dim);margin-top:1px;letter-spacing:.1em;height:15px}
 .col.me .t{color:#fff}
 #cap{font-size:13px;color:#b9bfcc;letter-spacing:.14em}
-#redo{position:absolute;left:8px;top:8px;width:auto;height:30px;max-width:none;
+#redo{position:absolute;left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));width:auto;height:30px;max-width:none;
   padding:0 12px 0 calc(12px + .25em);font-size:12px;letter-spacing:.25em;border-radius:15px;background:rgba(8,10,16,.55);
   border:1px solid rgba(200,215,245,.28);box-shadow:none;color:#c9d2e6;opacity:0;pointer-events:none;transition:opacity .6s;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -667,7 +674,10 @@ function restart(){
   $('card').classList.remove('on','open');$('redo').classList.remove('on');cardOpen=false;
   $('result').classList.add('hide');$('result').style.opacity='';$('endcta').classList.add('hide');$('form').classList.remove('hide');
 }
-$('go').onclick=()=>{auInit();startRun();};
+$('go').onclick=()=>{auInit();
+  const el=document.documentElement,fs=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(fs&&matchMedia('(pointer:coarse)').matches&&!document.fullscreenElement){try{const r=fs.call(el,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>{});}catch(_){}}
+  startRun();};
 $('redo').onclick=restart;$('again2').onclick=restart;
 $('card').onclick=()=>{cardOpen=!cardOpen;$('card').classList.toggle('open',cardOpen);$('c-hint').textContent=cardOpen?'再点一次收起':'轻点卡片展开详情';};
 function gotoYear(k){

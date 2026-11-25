@@ -30,7 +30,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
 .hide{opacity:0;transform:translateY(14px);pointer-events:none!important}
 .hide *{pointer-events:none!important}
 h1{font-weight:400;font-size:20px;letter-spacing:.7em;padding-left:.7em;text-shadow:0 0 14px rgba(220,230,255,.6)}
-.sub{font-size:12px;color:var(--dim);letter-spacing:.16em;text-align:center}
+.sub{font-size:13px;color:#eef2fa;letter-spacing:.16em;text-align:center;text-shadow:0 0 3px #000,0 0 8px #000,0 0 14px rgba(0,0,0,.9)}
 .row{display:flex;gap:10px;width:100%;max-width:420px}
 .row > *{flex:1;min-width:0}
 select{appearance:none;-webkit-appearance:none;width:100%;height:44px;padding:0 12px;border-radius:12px;
@@ -38,7 +38,7 @@ select{appearance:none;-webkit-appearance:none;width:100%;height:44px;padding:0 
   font:16px "Noto Serif SC","Songti SC",serif;text-align:center;text-align-last:center;outline:none}
 select:focus{border-color:rgba(240,244,255,.7);box-shadow:0 0 12px rgba(200,215,255,.25)}
 select option{background:#111;color:#eee}
-.lab{font-size:11px;color:var(--dim);letter-spacing:.3em;text-align:center;margin-bottom:5px}
+.lab{font-size:11px;color:#d3d9e6;letter-spacing:.3em;text-align:center;margin-bottom:5px;text-shadow:0 0 3px #000,0 0 8px #000}
 button{width:100%;max-width:420px;height:48px;border-radius:24px;border:1px solid rgba(240,244,255,.65);
   background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));color:#fff;
   font:17px "Noto Serif SC","Songti SC",serif;letter-spacing:.9em;padding-left:.9em;cursor:pointer;
@@ -46,7 +46,7 @@ button{width:100%;max-width:420px;height:48px;border-radius:24px;border:1px soli
 button:active{transform:scale(.97)}
 button.ghost{height:38px;width:auto;padding:0 22px 0 calc(22px + .5em);font-size:13px;letter-spacing:.5em;
   background:transparent;border-color:var(--line);box-shadow:none;color:var(--dim)}
-.note{font-size:10.5px;color:#666b76;letter-spacing:.08em;text-align:center}
+.note{font-size:10.5px;color:#a3aaba;letter-spacing:.08em;text-align:center;text-shadow:0 0 3px #000,0 0 8px #000}
 #result .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;max-width:420px}
 .col{text-align:center}
 .col .t{font-size:11px;color:var(--dim);letter-spacing:.3em;padding-left:.3em;margin-bottom:6px}
@@ -127,7 +127,6 @@ button.ghost{height:38px;width:auto;padding:0 22px 0 calc(22px + .5em);font-size
     <div class="hint" id="c-hint">轻点卡片展开详情</div>
   </div>
   <div class="sheet" id="form">
-    <h1>起盘</h1>
     <div class="sub">输入出生时间，罗盘将为你转动</div>
     <div class="row">
       <div><div class="lab">年</div><select id="sy"></select></div>
@@ -1021,7 +1020,10 @@ function frame(now){
         const R=(t-1.0-.5*k)*RIPPLE_V*S;
         if(R>0&&R<.92*S){ctx.save();ctx.globalAlpha=ringA*.5*(1-R/(.92*S));
           ctx.strokeStyle='#dfe6f7';ctx.lineWidth=1.2;ctx.shadowColor='rgba(210,225,255,1)';ctx.shadowBlur=8;
-          ctx.beginPath();ctx.arc(0,0,R,0,6.283);ctx.stroke();ctx.restore();}
+          ctx.beginPath();ctx.arc(0,0,R,0,6.283);ctx.stroke();ctx.restore();
+          const v=RIPPLE_V*S*kx,fade=1-R/(.92*S);
+          for(let m=0;m<Math.round(14*fade);m++){const a=Math.random()*TAU,rr=R*(1+gss()*.015);
+            fine(c0[0]+Math.cos(a)*rr*kx,c0[1]+Math.sin(a)*rr*ky,Math.cos(a)*v*(.9+Math.random()*.5),Math.sin(a)*v*(.9+Math.random()*.5),.8+Math.random()*1.1);}}
       }
     }
     if(mode!=='idle'){
@@ -1525,8 +1527,8 @@ const GLX={ok:false};
           vec2 fc=gl_FragCoord.xy/uDpr;vec2 q=vec2(fc.x-uC.x,(uRes.y-fc.y)-uC.y)/uR;
           float r=max(length(q),1e-4);
           vec2 z=vec2(log(r),atan(q.y,q.x));
-          const float R1=0.26,R2=0.99;float L=log(R2/R1),al=atan(L/6.2831853),f=cos(al);
-          z=f*vec2(z.x*cos(al)-z.y*sin(al),z.x*sin(al)+z.y*cos(al));
+          const float R1=0.26,R2=0.99;float L=log(R2/R1),kk=L/6.2831853;
+          z=vec2(z.x-z.y*kk,z.y+z.x*kk);
           z.x+=uZoom;z.y+=uRot;
           z.x=mod(z.x-log(R1),L)+log(R1);
           vec2 w=exp(z.x)*vec2(cos(z.y),sin(z.y));
@@ -1536,17 +1538,17 @@ const GLX={ok:false};
           gl_FragColor=vec4(c.rgb,c.a*uA*vig*bot);
         }`});
     const sScene=new THREE.Scene();sScene.add(new THREE.Mesh(new THREE.PlaneBufferGeometry(2,2),smat));
-    GLX.spA=0;let zoom=0;
+    GLX.spA=0;
     GLX.resize=()=>{R.setPixelRatio(DPR);R.setSize(W,H,false);buildTex();};
     GLX.frame=(now,p,cs,t,dt)=>{
       const a=ss(clamp((p-P_END-.07)/.08));
       /* 螺旋：待机时一直在；点「起盘」后加速卷进中心、淡出 */
       const tgt=mode==='idle'?1:(t<.8?1-ss(clamp(t/.8)):0);
       GLX.spA+=(tgt-GLX.spA)*Math.min(1,dt*(tgt>GLX.spA?2.5:12));
-      zoom+=dt*(mode==='idle'?.14:.14+Math.max(0,t)*3.2);
+
       if(GLX.spA>.003){
         SU.uRes.value.set(W,H);SU.uC.value.set(CX,CY);SU.uR.value=TOTAL*S*1.15;SU.uDpr.value=DPR;
-        SU.uZoom.value=zoom;SU.uRot.value=now/1000*.05;SU.uA.value=GLX.spA;
+        SU.uZoom.value=0;SU.uRot.value=0;SU.uA.value=GLX.spA;
         R.render(sScene,cam);shown=true;return;
       }
       if(a<.004){if(shown){R.clear();shown=false;}return;}

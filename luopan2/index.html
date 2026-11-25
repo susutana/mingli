@@ -1512,9 +1512,13 @@ const GLX={ok:false};
     const tex=new THREE.CanvasTexture(tcv);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
     function buildTex(){
       const g=tcv.getContext('2d');g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,TS,TS);
-      const m=(TS/2)/(TOTAL*S*DPR);g.translate(TS/2,TS/2);
-      for(let i=1;i<RINGS.length;i++){const c=caches[i];if(!c)continue;const w=c.width*m;g.drawImage(c,-w/2,-w/2,w,w);}
-      if(taijiImg){const w=taijiImg.width*m/TQ;g.drawImage(taijiImg,-w/2,-w/2,w,w);}
+      g.translate(TS/2,TS/2);
+      /* 按贴图的分辨率重新画一遍罗盘（不是把屏幕上的小图放大），字才清晰 */
+      const keep=DPR;DPR=(TS/2)/(TOTAL*S);
+      try{
+        for(let i=1;i<RINGS.length;i++){const c=renderRing(RINGS[i]);g.drawImage(c,-c.width/2,-c.height/2);c.width=c.height=0;}
+        const tj=renderTaiji(),w=tj.width/TQ;g.drawImage(tj,-w/2,-w/2,w,w);tj.width=tj.height=0;
+      }finally{DPR=keep;}
       tex.needsUpdate=true;
     }
     const SU={tex:{value:tex},uRes:{value:new THREE.Vector2(1,1)},uC:{value:new THREE.Vector2()},uR:{value:1},uDpr:{value:1},
@@ -1535,7 +1539,8 @@ const GLX={ok:false};
           vec4 c=texture2D(tex,vec2(0.5+0.5*w.x,0.5-0.5*w.y));
           float vig=1.0-smoothstep(0.75,1.9,length(q))*0.75;
           float bot=1.0-smoothstep(uRes.y*0.5,uRes.y*0.82,uC.y+q.y*uR)*0.8;
-          gl_FragColor=vec4(c.rgb,c.a*uA*vig*bot);
+          float deep=smoothstep(0.015,0.2,length(q));
+          gl_FragColor=vec4(c.rgb,c.a*uA*vig*bot*deep);
         }`});
     const sScene=new THREE.Scene();sScene.add(new THREE.Mesh(new THREE.PlaneBufferGeometry(2,2),smat));
     GLX.spA=0;let zoom=0;

@@ -1010,7 +1010,7 @@ function frame(now){
     ctx.setTransform(DPR*kx,0,0,DPR*ky,c0[0]*DPR,c0[1]*DPR);
     ctx.globalAlpha=ringA;
     const tr=RINGS[0].r1*S;
-    if(mode==='idle'||t<2.4){ drawIntro(t,now); }
+    if(mode==='idle'||t<2.4){ if(GLX.ok) ctx.globalAlpha=ringA*(1-GLX.spA); drawIntro(t,now); ctx.globalAlpha=ringA; }
     else{
       taiRot+=dt*(t<9?.7:Math.max(.15,.7-(t-9)*.25));
       ctx.save();ctx.rotate(taiRot+SPIN.a*1.6);ctx.shadowColor='rgba(215,228,255,.95)';ctx.shadowBlur=14;
@@ -1083,7 +1083,7 @@ function frame(now){
   /* —— 第二、三幕：字落成链 → 梯子 —— */
   if(mode==='run'&&revealed&&p>.115) drawStory(now,t,p,cs,dt);
 
-  if(GLX.ok) GLX.frame(now,p,cs);
+  if(GLX.ok) GLX.frame(now,p,cs,t,dt);
 
   /* 面板 / HUD */
   if(mode==='run'&&!revealed&&t>REVEAL){revealed=true;$('result').classList.remove('hide');}
@@ -1503,9 +1503,52 @@ const GLX={ok:false};
     pts.frustumCulled=false;scene.add(pts);
     const riv=new THREE.Points(vgeo,mat);riv.frustumCulled=false;scene.add(riv);
     let shown=false;
-    GLX.resize=()=>{R.setPixelRatio(DPR);R.setSize(W,H,false);};
-    GLX.frame=(now,p,cs)=>{
+    /* ---------- 开场的螺旋罗盘（德罗斯特效果）----------
+       把完整的罗盘画成一张贴图，着色器把屏幕坐标做对数螺旋变换：
+       罗盘一圈套一圈往中心盘进去，越往里越小，并且一直缓缓向中心流。 */
+    const TS=2048,tcv=document.createElement('canvas');tcv.width=tcv.height=TS;
+    const tex=new THREE.CanvasTexture(tcv);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+    function buildTex(){
+      const g=tcv.getContext('2d');g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,TS,TS);
+      const m=(TS/2)/(TOTAL*S*DPR);g.translate(TS/2,TS/2);
+      for(let i=1;i<RINGS.length;i++){const c=caches[i];if(!c)continue;const w=c.width*m;g.drawImage(c,-w/2,-w/2,w,w);}
+      if(taijiImg){const w=taijiImg.width*m/TQ;g.drawImage(taijiImg,-w/2,-w/2,w,w);}
+      tex.needsUpdate=true;
+    }
+    const SU={tex:{value:tex},uRes:{value:new THREE.Vector2(1,1)},uC:{value:new THREE.Vector2()},uR:{value:1},uDpr:{value:1},
+      uZoom:{value:0},uRot:{value:0},uA:{value:0}};
+    const smat=new THREE.ShaderMaterial({uniforms:SU,transparent:true,depthTest:false,depthWrite:false,
+      vertexShader:`void main(){gl_Position=vec4(position.xy,0.0,1.0);}`,
+      fragmentShader:`
+        precision highp float;uniform sampler2D tex;uniform vec2 uRes,uC;uniform float uR,uDpr,uZoom,uRot,uA;
+        void main(){
+          vec2 fc=gl_FragCoord.xy/uDpr;vec2 q=vec2(fc.x-uC.x,(uRes.y-fc.y)-uC.y)/uR;
+          float r=max(length(q),1e-4);
+          vec2 z=vec2(log(r),atan(q.y,q.x));
+          const float R1=0.26,R2=0.99;float L=log(R2/R1),al=atan(L/6.2831853),f=cos(al);
+          z=f*vec2(z.x*cos(al)-z.y*sin(al),z.x*sin(al)+z.y*cos(al));
+          z.x+=uZoom;z.y+=uRot;
+          z.x=mod(z.x-log(R1),L)+log(R1);
+          vec2 w=exp(z.x)*vec2(cos(z.y),sin(z.y));
+          vec4 c=texture2D(tex,vec2(0.5+0.5*w.x,0.5-0.5*w.y));
+          float vig=1.0-smoothstep(0.75,1.9,length(q))*0.75;
+          float bot=1.0-smoothstep(uRes.y*0.5,uRes.y*0.82,uC.y+q.y*uR)*0.8;
+          gl_FragColor=vec4(c.rgb,c.a*uA*vig*bot);
+        }`});
+    const sScene=new THREE.Scene();sScene.add(new THREE.Mesh(new THREE.PlaneBufferGeometry(2,2),smat));
+    GLX.spA=0;let zoom=0;
+    GLX.resize=()=>{R.setPixelRatio(DPR);R.setSize(W,H,false);buildTex();};
+    GLX.frame=(now,p,cs,t,dt)=>{
       const a=ss(clamp((p-P_END-.07)/.08));
+      /* 螺旋：待机时一直在；点「起盘」后加速卷进中心、淡出 */
+      const tgt=mode==='idle'?1:(t<.8?1-ss(clamp(t/.8)):0);
+      GLX.spA+=(tgt-GLX.spA)*Math.min(1,dt*(tgt>GLX.spA?2.5:12));
+      zoom+=dt*(mode==='idle'?.14:.14+Math.max(0,t)*3.2);
+      if(GLX.spA>.003){
+        SU.uRes.value.set(W,H);SU.uC.value.set(CX,CY);SU.uR.value=TOTAL*S*1.15;SU.uDpr.value=DPR;
+        SU.uZoom.value=zoom;SU.uRot.value=now/1000*.05;SU.uA.value=GLX.spA;
+        R.render(sScene,cam);shown=true;return;
+      }
       if(a<.004){if(shown){R.clear();shown=false;}return;}
       shown=true;const secs=now/1000;updateRiver(secs);
       U.uT.value=secs;U.uYaw.value=TV.yaw+secs*.05;U.uTy.value=cs.ty;U.uTx.value=cs.tx;U.uDd.value=cs.dd;U.uDy.value=cs.dy;

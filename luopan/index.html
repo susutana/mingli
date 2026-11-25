@@ -18,11 +18,12 @@ html,body{height:100%;overflow:hidden;color:var(--silver);background-color:#000;
   background-image:radial-gradient(circle at 50% 36%,#0c0d14 0%,#030305 55%,#000 100%);
   font-family:"Noto Serif SC","Songti SC","STSong","Noto Serif CJK SC",serif}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
-#scroller{position:fixed;inset:0;z-index:1;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#gl{z-index:1;pointer-events:none}
+#scroller{position:fixed;inset:0;z-index:2;overflow-y:hidden;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
 #scroller.on{overflow-y:auto}
 #scroller::-webkit-scrollbar{display:none}
 #spacer{height:1500vh;width:1px}
-#app{position:fixed;inset:0;pointer-events:none;z-index:2}
+#app{position:fixed;inset:0;pointer-events:none;z-index:3}
 .sheet{position:absolute;left:0;right:0;bottom:0;padding:18px 22px calc(24px + env(safe-area-inset-bottom));
   display:flex;flex-direction:column;align-items:center;gap:14px;transition:opacity .9s ease,transform .9s ease;pointer-events:none}
 .sheet button,.sheet select,.sheet input,.sheet label{pointer-events:auto}
@@ -105,6 +106,7 @@ button.ghost{height:38px;width:auto;padding:0 22px 0 calc(22px + .5em);font-size
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="gl"></canvas>
 <div id="scroller"><div id="spacer"></div></div>
 <div id="app">
   <button id="redo">换盘</button>
@@ -147,6 +149,7 @@ button.ghost{height:38px;width:auto;padding:0 22px 0 calc(22px + .5em);font-size
   </div>
 </div>
 
+<script src="three.min.js"></script>
 <script>
 (()=>{
 /* ====================== 历法计算 ====================== */
@@ -243,6 +246,7 @@ function layout(){
   caches=RINGS.map(d=>d.id==='taiji'?null:renderRing(d));
   taijiImg=renderTaiji();
   SP={};buildGlyphs();
+  if(GLX.ok) GLX.resize();
   if(!TV.sr){TV.scx=W/2;TV.scy=H*.44;TV.sr=Math.min(W,H)*.4;}
 }
 addEventListener('resize',()=>{clearTimeout(layout.t);layout.t=setTimeout(layout,150);});
@@ -839,10 +843,10 @@ function drawFX(now,dt){
     }
   }
 }
-function star(x,y,s,a){
+function star(x,y,s,a,calm){
   ctx.globalAlpha=a;ctx.fillStyle='#f4f7ff';
   ctx.beginPath();ctx.arc(x,y,s,0,6.283);ctx.fill();
-  if(s>1.5){ctx.strokeStyle='#f4f7ff';ctx.lineWidth=.6;ctx.beginPath();
+  if(s>1.5&&!calm){ctx.strokeStyle='#f4f7ff';ctx.lineWidth=.6;ctx.beginPath();
     ctx.moveTo(x-s*3.2,y);ctx.lineTo(x+s*3.2,y);ctx.moveTo(x,y-s*3.2);ctx.lineTo(x,y+s*3.2);ctx.stroke();}
 }
 
@@ -929,14 +933,14 @@ function frame(now){
   SPIN.v*=Math.exp(-dt*(1.4+5*slow));SPIN.a+=SPIN.v*dt;
 
   /* 滑到树的那一页：树自己快速转一圈，周围散开细粒子、亮起粒子环 */
-  if(mode==='run'&&p>P_END+.1&&TV.armed){TV.armed=false;TV.spinT=now;TV.spinDone=0;treeBurst();}
+  if(mode==='run'&&p>P_END+.1&&TV.armed){TV.armed=false;TV.spinT=now;TV.spinDone=0;if(!GLX.ok)treeBurst();}
   if(p<P_END+.04){TV.armed=true;
     if(TV.hasCloud){TV.hasCloud=false;for(const q of sparks) if(q.keep){q.keep=false;q.max=q.life=.6+Math.random()*.6;}}}
   let orbT=p>P_END+.08?.18:0;
   if(TV.spinT){
     const u=clamp((now-TV.spinT)/1700),e=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2,tg=TAU*e;
     TV.yaw+=tg-TV.spinDone;TV.spinDone=tg;orbT=1;
-    if(u<.9) for(let i=0;i<26;i++){const a=Math.random()*TAU,rr=TV.sr*(.6+Math.random()*.7),sp=80+Math.random()*180;
+    if(u<.9&&!GLX.ok) for(let i=0;i<26;i++){const a=Math.random()*TAU,rr=TV.sr*(.6+Math.random()*.7),sp=80+Math.random()*180;
       fine(TV.scx+Math.cos(a)*rr,TV.scy+Math.sin(a)*rr*.75+gss()*24,-Math.sin(a)*sp,Math.cos(a)*sp*.55-25,3,true);}
     if(u>=1) TV.spinT=0;
   }
@@ -951,6 +955,8 @@ function frame(now){
   for(let i=1;i<RINGS.length;i++){ if(!drag&&Math.abs(spin[i])>.001){userRot[i]+=spin[i]*dt;spin[i]*=Math.exp(-dt*2.2);} }
 
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  const blk=GLX.ok?ss(clamp((p-P_END-.07)/.08)):0;
+  if(blk>.002){ctx.globalAlpha=blk;ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
 
   /* 星尘：随镜头视差移动 */
   ctx.globalCompositeOperation='lighter';
@@ -959,7 +965,7 @@ function frame(now){
     let y=s.y*H-cs.ty*S*.16*s.d+now*.0009*s.d;
     y=mod(y,H+60)-30;
     const tw=.3+.7*(.5+.5*Math.sin(now/1000*s.ts+s.ph));
-    star(x,y,s.size,s.base*tw*.9);
+    star(x,y,blk>.5?s.size*.6:s.size,s.base*tw*.9*(1-.6*blk),blk>.5);
   }
   drawFX(now,dt);
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
@@ -1027,6 +1033,8 @@ function frame(now){
 
   /* —— 第二、三幕：字落成链 → 梯子 —— */
   if(mode==='run'&&revealed&&p>.115) drawStory(now,t,p,cs,dt);
+
+  if(GLX.ok) GLX.frame(now,p,cs);
 
   /* 面板 / HUD */
   if(mode==='run'&&!revealed&&t>REVEAL){revealed=true;$('result').classList.remove('hide');}
@@ -1268,7 +1276,7 @@ function drawStory(now,t,p,cs,dt){
       g3.addColorStop(0,'rgba(225,238,255,'+a+')');g3.addColorStop(.4,'rgba(150,195,255,'+(a*.45)+')');g3.addColorStop(1,'rgba(150,195,255,0)');
       ctx.fillStyle=g3;ctx.beginPath();ctx.arc(q[0],q[1],r,0,TAU);ctx.fill();
     }
-    if(TV.orbA>.01){
+    if(TV.orbA>.01&&!GLX.ok){
       const oy=TV.yaw*1.7;
       for(const o of ORB){
         const an=o.a+oy+secs*o.sp*.25,x=Math.cos(an)*o.r,z=Math.sin(an)*o.r,y=TV.cy+o.y+Math.sin(an*2+o.ph)*.06;
@@ -1318,6 +1326,108 @@ function drawStory(now,t,p,cs,dt){
   }
   ctx.globalAlpha=1;ctx.setTransform(DPR,0,0,DPR,0,0);
 }
+
+/* ====================== 最后一幕的柔光粒子（WebGL / Three.js） ======================
+   上万颗极小的光点围着树缓慢公转，每颗都有高斯光晕（中心亮、边缘柔化），叠加混合；
+   树底有三圈同心光环慢慢向外扩散。投影和画布上的树用同一套相机公式，所以完全贴合。
+   点一下：附近的光点被推开、变亮，再慢慢回来。没有 WebGL 时自动退回原来的画法。 */
+const GLX={ok:false};
+(function initGL(){
+  try{
+    if(!window.THREE) return;
+    const cvs=$('gl');
+    const R=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:false,premultipliedAlpha:false});
+    R.setClearColor(0x000000,0);
+    const NC=10000,NRING=3,PR=1200,N=NC+NRING*PR;
+    const pos=new Float32Array(N*3),ex=new Float32Array(N*4),col=new Float32Array(N);
+    const r=rng(9157),g=()=>(r()+r()+r()-1.5)/1.5;
+    for(let i=0;i<N;i++){
+      let kind,rad,yv,sz;
+      if(i<NC){
+        const u=r();
+        if(u<.62){                                   // 树冠外围一层壳
+          const ph=Math.acos(2*r()-1),s=.8+Math.pow(r(),.55)*.65;
+          kind=0;rad=Math.abs(Math.sin(ph))*1.5*s;yv=Math.cos(ph)*(Math.cos(ph)<0?1.0:.75)*s;
+        }else if(u<.88){                             // 从树冠到地面围着整棵树的一圈
+          kind=1;rad=.35+Math.pow(r(),.7)*1.35;yv=r();
+        }else{                                       // 更外面稀疏的一层
+          const ph=Math.acos(2*r()-1),s=1.6+r()*1.1;
+          kind=0;rad=Math.abs(Math.sin(ph))*s;yv=Math.cos(ph)*s*.8;
+        }
+        sz=r()<.07?14+r()*12:4.2+Math.pow(r(),2)*5.5;
+        ex[i*4+2]=(.05+r()*.14)*(r()<.85?1:-1);
+      }else{                                         // 树底三圈慢慢扩散的光环
+        const k=Math.floor((i-NC)/PR);
+        kind=2+k;rad=g()*.035;yv=g()*.012;sz=4+Math.pow(r(),2)*5;ex[i*4+2]=.02;
+      }
+      pos[i*3]=rad;pos[i*3+1]=r()*TAU;pos[i*3+2]=yv;
+      ex[i*4]=kind;ex[i*4+1]=sz;ex[i*4+3]=r()*TAU;col[i]=Math.pow(r(),1.6);
+    }
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    geo.setAttribute('aEx',new THREE.BufferAttribute(ex,4));
+    geo.setAttribute('aCol',new THREE.BufferAttribute(col,1));
+    const U={uT:{value:0},uYaw:{value:0},uTy:{value:0},uTx:{value:0},uDd:{value:3},uDy:{value:0},uCyaw:{value:1},uSyaw:{value:0},
+      uCp:{value:1},uSp:{value:0},uS:{value:1},uC:{value:new THREE.Vector2()},uRes:{value:new THREE.Vector2(1,1)},uDpr:{value:1},
+      uCy:{value:0},uG:{value:0},uA:{value:0},uKref:{value:1},uB:{value:[0,1,2,3].map(()=>new THREE.Vector4(0,0,0,0))}};
+    const mat=new THREE.ShaderMaterial({uniforms:U,transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,
+      vertexShader:`
+        attribute vec4 aEx;attribute float aCol;
+        uniform float uT,uYaw,uTy,uTx,uDd,uDy,uCyaw,uSyaw,uCp,uSp,uS,uDpr,uCy,uG,uA,uKref;
+        uniform vec2 uC,uRes;uniform vec4 uB[4];
+        varying float vA;varying vec3 vC;varying float vHot;
+        void main(){
+          float kind=aEx.x,th=position.y+uT*aEx.z,a=1.0;vec3 w;
+          if(kind<0.5){w=vec3(cos(th)*position.x,uCy+position.z+sin(uT*0.7+aEx.w)*0.035,sin(th)*position.x);}
+          else if(kind<1.5){w=vec3(cos(th)*position.x,mix(uCy,uG,position.z)+sin(uT*0.6+aEx.w)*0.03,sin(th)*position.x);}
+          else{float ph=fract(uT*0.065+(kind-2.0)/3.0);float rr=mix(0.15,2.7,ph)+position.x;
+            w=vec3(cos(th)*rr,uG+position.z,sin(th)*rr);a=smoothstep(0.0,0.1,ph)*(1.0-smoothstep(0.45,1.0,ph));}
+          float cY=cos(uYaw),sY=sin(uYaw);
+          float rx=w.x*cY+w.z*sY,rz=-w.x*sY+w.z*cY;
+          float yy=w.y-uTy,xx=rx-uTx;
+          float x1=xx*uCyaw+rz*uSyaw,z1=-xx*uSyaw+rz*uCyaw;
+          float y2=yy*uCp-z1*uSp,z2=yy*uSp+z1*uCp;
+          float zc=z2+uDd;
+          if(zc<0.4){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;vA=0.0;return;}
+          float k=uS/zc;vec2 sc=vec2(uC.x+x1*k,uC.y+uDy+y2*k);
+          float glow=0.0;
+          for(int j=0;j<4;j++){vec4 b=uB[j];if(b.w<=0.0)continue;
+            vec2 dv=sc-b.xy;float d=length(dv);
+            if(d<b.w){float f=1.0-d/b.w,ag=b.z;
+              float o=ag<0.35?1.0-pow(1.0-ag/0.35,3.0):1.0-smoothstep(0.35,2.65,ag);
+              sc+=dv/max(d,1.0)*(8.0+55.0*f)*o;glow=max(glow,f*o);}}
+          float dep=clamp(1.2-(zc-uDd)*0.42,0.25,1.0);
+          vA=uA*a*dep*(0.7+0.3*sin(uT*2.3+aEx.w*7.0))*(1.0+glow*0.9)*0.9;
+          vC=mix(vec3(1.0),vec3(0.70,0.83,1.0),aCol);vHot=glow;
+          gl_PointSize=aEx.y*uDpr*clamp(k/uKref,0.6,1.9)*(1.0+glow*0.7);
+          gl_Position=vec4(sc.x/uRes.x*2.0-1.0,1.0-sc.y/uRes.y*2.0,0.0,1.0);
+        }`,
+      fragmentShader:`
+        precision mediump float;varying float vA;varying vec3 vC;varying float vHot;
+        void main(){vec2 p=gl_PointCoord-0.5;float d2=dot(p,p)*4.0;
+          float core=exp(-d2*42.0),halo=exp(-d2*6.5)*0.38+exp(-d2*2.2)*0.16;
+          float a=(core+halo)*vA;if(a<0.003)discard;
+          vec3 c=mix(mix(vC,vec3(0.80,0.88,1.0),0.35*(1.0-core)),vec3(0.78,0.88,1.0),vHot*0.5)*(1.0+core*0.6);
+          gl_FragColor=vec4(c,a);}`});
+    const scene=new THREE.Scene(),cam=new THREE.Camera(),pts=new THREE.Points(geo,mat);
+    pts.frustumCulled=false;scene.add(pts);
+    let shown=false;
+    GLX.resize=()=>{R.setPixelRatio(DPR);R.setSize(W,H,false);};
+    GLX.frame=(now,p,cs)=>{
+      const a=ss(clamp((p-P_END-.07)/.08));
+      if(a<.004){if(shown){R.clear();shown=false;}return;}
+      shown=true;const secs=now/1000;
+      U.uT.value=secs;U.uYaw.value=TV.yaw+secs*.05;U.uTy.value=cs.ty;U.uTx.value=cs.tx;U.uDd.value=cs.dd;U.uDy.value=cs.dy;
+      U.uCyaw.value=cs.cyaw;U.uSyaw.value=cs.syaw;U.uCp.value=cs.cp;U.uSp.value=cs.sp;U.uS.value=S*DD0;
+      U.uC.value.set(CX,CY);U.uRes.value.set(W,H);U.uDpr.value=DPR;U.uCy.value=TV.cy;U.uG.value=TREE.ground;U.uA.value=a;
+      U.uKref.value=S*DD0/Math.max(.1,TREE.dd||3);
+      for(let j=0;j<4;j++){const b=TV.bursts[TV.bursts.length-1-j];
+        if(b) U.uB.value[j].set(b.x,b.y,(now-b.t)/1000,b.R*1.15); else U.uB.value[j].set(0,0,0,0);}
+      R.render(scene,cam);
+    };
+    GLX.ok=true;
+  }catch(e){GLX.ok=false;}
+})();
 requestAnimationFrame(frame);
 })();
 </script>

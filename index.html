@@ -9,6 +9,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="流年罗盘">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>流年罗盘</title>
 <style>
 :root{--silver:#e8ebf2;--dim:#8d93a0;--line:rgba(220,226,240,.28)}
@@ -150,6 +153,7 @@ button.ghost{height:38px;width:auto;padding:0 22px 0 calc(22px + .5em);font-size
 
 <script src="three.min.js"></script>
 <script>
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}
 (()=>{
 /* ====================== 历法计算 ====================== */
 /*CALC*/
